@@ -1,0 +1,6 @@
+run with:
+python opsview_bot.py <server:port> <channel> <nick>
+
+Requires pyopsview.
+
+Nearly all credit goes to the pyirclib project for doing all the hard stuff.
