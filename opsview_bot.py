@@ -9,13 +9,17 @@ from irclib import nm_to_n, nm_to_h, irc_lower, ip_numstr_to_quad, ip_quad_to_nu
 import opsview
 
 class OpsviewBot(SingleServerIRCBot):
-    def __init__(self, channel, nickname, server, port=6667):
-        SingleServerIRCBot.__init__(self, [(server, port)], nickname, nickname)
-        self.channel = channel
+    def __init__(self, options):
+        super(OpsviewBot, self).__init__(
+            [(options.server, options.port)],
+            options.nickname,
+            options.nickname
+        )
+        self.channel = options.channel
         self.ops_server = opsview.OpsviewServer(
-            base_url='https://example.com/opsview/',
-            username='user',
-            password='pass'
+            base_url=options.base_url,
+            username=options.username,
+            password=options.password
         )
 
         self.connection.execute_delayed(
@@ -96,26 +100,59 @@ class OpsviewBot(SingleServerIRCBot):
 
 
 if __name__ == "__main__":
+    if not hasattr(__builtins__, 'all'):
+        # all was added in Python 2.5
+        def all(target):
+            for item in target:
+                if not item:
+                    return False
+            return True
+
     def main():
+        from optparse import OptionParser
+        from os.path import basename
         import sys
-        if len(sys.argv) != 4:
-            print "Usage: testbot <server[:port]> <channel> <nickname>"
-            sys.exit(1)
 
-        s = sys.argv[1].split(":", 1)
-        server = s[0]
-        if len(s) == 2:
-            try:
-                port = int(s[1])
-            except ValueError:
-                print "Error: Erroneous port."
-                sys.exit(1)
+        parser = OptionParser(
+            usage='',
+            version=''
+        )
+
+        required_options = [
+            'base_url',
+            'channel',
+            'server',
+            'username',
+            'password',
+        ]
+
+        parser.add_option('-b', '--base-url',
+            type='string', metavar='URL',
+            help='Base URL to the Opsview Server.')
+        parser.add_option('-c', '--channel',
+            type='string', metavar='#CHANNEL')
+        parser.add_option('-n', '--nickname',
+            type='string', default='opsbot')
+        parser.add_option('-p', '--port',
+            type='int', default=6667)
+        parser.add_option('-s', '--server',
+            type='string', metavar='IP.OR.HOST.NAME',
+            help='IRC server to connect to.')
+        parser.add_option('-u', '--username',
+            type='string', help='Opsview username.')
+        parser.add_option('-w', '--password',
+            type='string', help='Opsview user\'s password.')
+
+        options, _ = parser.parse_args()
+
+        missing_options = filter(
+            lambda option: not hasattr(options, option),
+            required_options
+        )
+        if missing_options:
+            print 'Missing required options: %s' % missing_options
         else:
-            port = 6667
-        channel = sys.argv[2]
-        nickname = sys.argv[3]
-
-        bot = TestBot(channel, nickname, server, port)
-        bot.start()
+            bot = OpsviewBot(options=options)
+            bot.start()
 
     main()
