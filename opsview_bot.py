@@ -44,9 +44,8 @@ class OpsviewBot(SingleServerIRCBot):
             self.do_command(e, a[1].strip())
         return
 
-    def do_command(self, e, cmd):
-        nick = nm_to_n(e.source())
-        c = self.connection
+    def do_command(self, event, cmd):
+        nick = nm_to_n(event.source())
         cmd = cmd.split(' ')
         try:
             cmd, cmd_args = cmd[0], cmd[1:]
@@ -59,14 +58,32 @@ class OpsviewBot(SingleServerIRCBot):
             self.die()
         elif cmd == "ack":
             try:
-                self.ops_server.remote.acknowledge_all(comment='irc: %s: %s' % (nick, ' '.join(cmd_args)))
-                c.notice(self.channel, 'acked for %s' % nick)
+                if cmd_args[0] in [host['name'] for host in self.ops_server.children]:
+                    if len(cmd_args) > 2 and cmd_args[0]+cmd_args[1] in [host['name']+service['name']
+                        for host in self.ops_server.children for service in host]:
+                        self.ops_server.remote.acknowledge_service(
+                            host=cmd_args[0],
+                            service=cmd_args[1],
+                            comment='%s via IRC: %s' % (nick, ' '.join(cmd_args[2:])),
+                        )
+                        self.connection.notice(self.channel, 'Acknowledged service %s:%s for %s' %
+                            (cmd_args[0], cmd_args[1], nick))
+                    else:
+                        self.ops_server.remote.acknowledge_host(
+                            host=cmd_args[0],
+                            comment='%s via IRC: %s' % (nick, ' '.join(cmd_args[1:])),
+                        )
+                        self.connection.notice(self.channel, 'Acknowledged host %s for %s' % (cmd_args[0], nick))
+                else:
+                    self.ops_server.remote.acknowledge_all(
+                        comment='%s via IRC: %s' % (nick, ' '.join(cmd_args)))
+                    self.connection.notice(self.channel, 'Acknowledged all for %s' % nick)
             except Exception, error:
-                c.notice(self.channel, 'error while acking: %s' % error)
+                self.connection.notice(self.channel, 'Uncaught exception while acknowledging: %s' % error)
         elif cmd == "status":
-            c.notice(self.channel, 'Currently alerting: ' + ', '.join(self.alerting))
+            self.connection.notice(self.channel, 'Currently alerting: ' + ', '.join(self.alerting))
         else:
-            c.notice(nick, "Not understood: " + cmd)
+            self.connection.notice(nick, "Not understood: " + cmd)
     def output_status(self, circular=False):
         max_state_duration = 12 * 60 * 60 # hours x minutes x seconds
         now_alerting = []
@@ -114,8 +131,8 @@ if __name__ == "__main__":
         import sys
 
         parser = OptionParser(
-            usage='',
-            version=''
+            usage='%prog [options]',
+            version='%prog v0.2.0'
         )
 
         required_options = [
@@ -128,20 +145,21 @@ if __name__ == "__main__":
 
         parser.add_option('-b', '--base-url',
             type='string', metavar='URL',
-            help='Base URL to the Opsview Server.')
+            help='Required. Base URL to the Opsview Server.')
         parser.add_option('-c', '--channel',
-            type='string', metavar='#CHANNEL')
+            type='string', metavar='#CHANNEL',
+            help='Required.')
         parser.add_option('-n', '--nickname',
             type='string', default='opsbot')
         parser.add_option('-p', '--port',
             type='int', default=6667)
         parser.add_option('-s', '--server',
             type='string', metavar='IP.OR.HOST.NAME',
-            help='IRC server to connect to.')
+            help='Required. IRC server to connect to.')
         parser.add_option('-u', '--username',
-            type='string', help='Opsview username.')
+            type='string', help='Required. Opsview username.')
         parser.add_option('-w', '--password',
-            type='string', help='Opsview user\'s password.')
+            type='string', help='Required. Opsview user\'s password.')
 
         options, _ = parser.parse_args()
 
