@@ -27,7 +27,7 @@ class OpsviewBot(SingleServerIRCBot):
             function=self.output_status,
             arguments=(True,)
         )
-        self.alerting = {}
+        self.alerting = []
 
     def on_nicknameinuse(self, c, e):
         c.nick(c.get_nickname() + "_")
@@ -84,6 +84,7 @@ class OpsviewBot(SingleServerIRCBot):
             self.connection.notice(self.channel, 'Currently alerting: ' + ', '.join(self.alerting))
         else:
             self.connection.notice(nick, "Not understood: " + cmd)
+
     def output_status(self, circular=False):
         max_state_duration = 12 * 60 * 60 # hours x minutes x seconds
         now_alerting = []
@@ -117,14 +118,6 @@ class OpsviewBot(SingleServerIRCBot):
 
 
 if __name__ == "__main__":
-    if not hasattr(__builtins__, 'all'):
-        # all was added in Python 2.5
-        def all(target):
-            for item in target:
-                if not item:
-                    return False
-            return True
-
     def main():
         from optparse import OptionParser
         from os.path import basename
