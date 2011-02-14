@@ -11,7 +11,8 @@ import datetime
 
 class OpsviewBot(SingleServerIRCBot):
     def __init__(self, options):
-        super(OpsviewBot, self).__init__(
+        #super(OpsviewBot, self).__init__(
+        SingleServerIRCBot.__init__(self,
             [(options.server, options.port)],
             options.nickname,
             options.nickname
@@ -29,8 +30,9 @@ class OpsviewBot(SingleServerIRCBot):
             arguments=(True,)
         )
         self.alerting = []
-        if options.log_file:
-            self._log_file = open(options.log_file)
+        if options.log_file != '':
+            self._log('Logging to: %s' % options.log_file)
+            self._log_file = open(options.log_file, 'a+')
             
     def __del__(self):
         try:
@@ -43,7 +45,7 @@ class OpsviewBot(SingleServerIRCBot):
         log_message = '%s LOG: %s' % (datetime.datetime.now().isoformat(), message)
         print log_message
         try:
-            self._log_file.write(log_message)
+            self._log_file.write(log_message + '\n')
         except AttributeError:
             pass
 
@@ -67,7 +69,7 @@ class OpsviewBot(SingleServerIRCBot):
     def do_command(self, event, cmd):
         nick = nm_to_n(event.source())
         cmd = cmd.split(' ')
-        self._log('Doing \'%s\' for \'%s\'' % (nick, cmd))
+        self._log('%s sent command/args: %s' % (nick,cmd))
         try:
             cmd, cmd_args = cmd[0], cmd[1:]
         except IndexError:
@@ -82,7 +84,7 @@ class OpsviewBot(SingleServerIRCBot):
             try:
                 if cmd_args[0] in [host['name'] for host in self.ops_server.children]:
                     if len(cmd_args) > 2 and cmd_args[0]+cmd_args[1] in [host['name']+service['name']
-                                                                         for host in self.ops_server.children for service in host]:
+                                                                         for host in self.ops_server.children for service in host.children]:
                         self._log('Acking service: %s %s' % (cmd_args[0], cmd_args[1]))
                         self.ops_server.remote.acknowledge_service(
                             host=cmd_args[0],
@@ -126,25 +128,23 @@ class OpsviewBot(SingleServerIRCBot):
                 if host['state'] == opsview.STATE_DOWN and \
                    host['current_check_attempt'] == host['max_check_attempts'] and \
                    host['state_duration'] < max_state_duration:
-                    self._log('Host now alerting: %s:%s' % (host['name'], host['state']))
                     now_alerting.append('%s:%s' % (host['name'], host['state']))
                 else:
                     for service in host.children:
                         if service['current_check_attempt'] == service['max_check_attempts'] and \
                            service['state_duration'] < max_state_duration and \
                            'flapping' not in service:
-                            self._log('Service now alerting: %s:%s:%s' % (host['name'], service['name'], service['state']))
                             now_alerting.append('%s[%s]:%s' % (host['name'], service['name'], service['state']))
             new_alerting = filter(lambda hash: hash not in self.alerting, now_alerting)
             recovered = filter(lambda hash: hash not in now_alerting, self.alerting)
-            self._log('New alerts: %s' % new_alerting)
-            self._log('Recoveries: %s' % recovered)
             self.alerting = now_alerting
             new_alerting = ', '.join(new_alerting)
             recovered = ', '.join(recovered)
             if len(recovered) is not 0:
+                self._log('Recoveries: %s' % recovered)
                 self.connection.notice(self.channel, 'Recovered: ' + recovered)
             if len(new_alerting) is not 0:
+                self._log('New alerts: %s' % new_alerting)
                 self.connection.notice(self.channel, 'New alerts: ' + new_alerting)
             self.connection.execute_delayed(delay=15, function=self.output_status,arguments=(True,))
 
